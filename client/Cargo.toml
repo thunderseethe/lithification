@@ -1,0 +1,21 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+bytemuck = { version = "1.7.3", features = ["derive"] }
+console_error_panic_hook = "0.1.7"
+console_log = "0.2.0"
+env_logger = "0.9.0"
+image = "0.24.1"
+naga = { version = "0.8.5", features = ["wgsl-in", "wgsl-out", "spv-in", "spv-out"] }
+nalgebra = "0.30"
+pollster = "0.2.5"
+wasm-bindgen-futures = "0.4.29"
+web-sys = "0.3.56"
+winit = "0.26.1"
+wgpu = { version = "0.12", features = [] }
