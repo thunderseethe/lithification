@@ -437,13 +437,13 @@ impl State {
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
         
-        let res_dir = std::path::Path::new(env!("OUT_DIR")).join("res");
+        //let res_dir = std::path::Path::new(env!("OUT_DIR")).join("res");
         let obj_model = model::Model::load(
             &device,
             &queue,
             &texture_bind_group_layout,
-            res_dir.join("cube.obj"),
-        ).unwrap();
+            "res/cube.obj",
+        );
 
         Self {
             surface,

@@ -50,7 +50,7 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn load<P: AsRef<Path>>(
+    pub async fn load<P: AsRef<Path>>(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,

@@ -11,10 +11,17 @@ use std::{
 use tower_http::services::ServeDir;
 
 use common::{Block, Chunk};
+use wasmtime::*;
+
+mod ecs;
 
 #[tokio::main]
 async fn main() {
     println!("Launched Server...");
+
+    let eng = Engine::new(
+        Config::new()
+            .wasm_module_linking(true))?;
 
     let serve_generated_dir = get_service(ServeDir::new("generated"));
     let app = Router::new()
@@ -30,15 +37,17 @@ async fn main() {
 
 async fn ws_chunk(ws: WebSocketUpgrade) -> impl IntoResponse {
     async fn handle_socket(mut socket: WebSocket) {
+        let chunk_half_dim = (Chunk::DIMENSION/2) as i16;
+        let chunk_sphere_threshold = chunk_half_dim * chunk_half_dim;
         let chunk = Chunk::from_fn(|x: u8, y: u8, z:u8| {
-            let x2 = (x as i16) - 16;
+            let x2 = (x as i16) - chunk_half_dim;
             let x2 = x2 * x2;
-            let y2 = (y as i16) - 16;
+            let y2 = (y as i16) - chunk_half_dim;
             let y2 = y2 * y2;
-            let z2 = (z as i16) - 16;
+            let z2 = (z as i16) - chunk_half_dim;
             let z2 = z2 * z2;
 
-            if x2 + y2 + z2 <= 16i16*16i16 {
+            if x2 + y2 + z2 < chunk_sphere_threshold {
                 Block::new(1)
             } else {
                 Block::new(0)

@@ -3,7 +3,7 @@ use morton_encoding::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Block {
-    id: u32,
+    pub id: u32,
 }
 
 impl Block {
@@ -23,34 +23,36 @@ impl Block {
     }
 }
 
-type BlockArray = [Block; 32 * 32 * 32];
-
 #[derive(Clone, Debug)]
-pub struct Chunk(BlockArray);
+pub struct Chunk(Vec<Block>);
 impl Chunk {
+    pub const DIMENSION: usize = 16;
+    pub const SIZE: usize = Chunk::DIMENSION * Chunk::DIMENSION * Chunk::DIMENSION;
+
+    pub fn from_ele(block: Block) -> Self {
+        Chunk(vec![block; Chunk::SIZE])
+    }
+
     pub fn from_fn(f: impl Fn(u8, u8, u8) -> Block) -> Self {
-        let mut arr: [Block; 32 * 32 * 32] = [Block { id: 0 }; 32 * 32 * 32];
+        Chunk((0..Chunk::SIZE).map(|i| {
+            let [x, y, z]: [u8; 3] = morton_decode(i as u32);
+            f(x, y, z)
+        }).collect()) 
+    }
 
-        for x in 0..32 {
-            for y in 0..32 {
-                for z in 0..32 {
-                   arr[morton_encode([x, y, z]) as usize] = f(x, y, z);
-                }
-            }
-        }
-
-        Chunk(arr)
+    pub fn has_block(&self, x: u8, y: u8, z: u8) -> bool {
+        self.0[morton_encode([x, y, z]) as usize].id != 0
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         self.0.iter().flat_map(|block| {
-            bytemuck::bytes_of(&block.id).iter().cloned()
+            block.to_bytes().into_iter()
         })
         .collect::<Vec<_>>()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        if bytes.len() != 32 * 32 * 32 * 4 {
+        if bytes.len() != Chunk::SIZE * std::mem::size_of::<Block>() {
             return Err(anyhow!("Not enough bytes to construct a chunk"));
         }
 
@@ -61,6 +63,17 @@ impl Chunk {
         blocks.try_into()
             .map(Chunk)
             .map_err(|_| anyhow!("Failed to make a Chunk from bytes"))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&Block> {
+        self.0.iter()
+    }
+
+    pub fn coord_iter(&self) -> impl Iterator<Item=(nalgebra::Point3<u8>, &Block)> {
+        self.0.iter().enumerate().map(|(i, block)| {
+            let coords: [u8; 3] = morton_decode(i as u32);
+            (coords.into(), block)
+        })
     }
 }
 
