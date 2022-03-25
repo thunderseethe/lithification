@@ -11,3 +11,18 @@ bytemuck = "1.8"
 log = "0.4"
 morton-encoding = "2.0"
 nalgebra = "0.30"
+
+[dependencies.wiggle]
+path = "../../wasmtime/crates/wiggle"
+version = "0.35"
+
+[build-dependencies]
+quote = "1.0.16"
+
+[build-dependencies.wiggle-generate]
+path = "../../wasmtime/crates/wiggle/generate"
+version = "0.35"
+
+[build-dependencies.witx]
+path = "../../wasmtime/crates/wasi-common/WASI/tools/witx"
+version = "0.9"

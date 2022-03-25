@@ -17,11 +17,7 @@ mod ecs;
 
 #[tokio::main]
 async fn main() {
-    println!("Launched Server...");
-
-    let eng = Engine::new(
-        Config::new()
-            .wasm_module_linking(true))?;
+    initialize_wasm().await.expect("Wasm Error");
 
     let serve_generated_dir = get_service(ServeDir::new("generated"));
     let app = Router::new()
@@ -29,10 +25,61 @@ async fn main() {
         .fallback(HandleError::new(serve_generated_dir, err_handle));
 
     let socket_addr = "192.168.0.163:3030".parse().unwrap();
+    println!("Launched Server..."); 
     axum::Server::bind(&socket_addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr, _>())
         .await
         .unwrap();
+}
+
+async fn initialize_wasm() -> anyhow::Result<()> {
+    use tokio::fs::read;
+
+    let engine = Engine::new(
+        Config::new()
+            .wasm_module_linking(true))?;  
+ 
+    let wasm = read("mods/player_movement/build/optimized.wasm").await?;
+    let module = Module::new(&engine, wasm).unwrap();
+
+    let mut store = Store::new(&engine, ());
+    fn get_string_impl(bytes: &[u8], ptr: usize) -> String {
+        let mut len = [0u8; 4];
+        len.copy_from_slice(&bytes[(ptr - 4)..ptr]);
+        let len: u32 = unsafe { std::mem::transmute(len) };
+        let str: Vec<u16> = (&bytes[ptr..(ptr + (len as usize))]).chunks(2)
+            .map(|s| unsafe { std::mem::transmute([s[0], s[1]]) })
+            .collect::<Vec<_>>();
+        String::from_utf16_lossy(&str)
+    }
+
+    let mut linker: Linker<()> = Linker::new(&engine);
+    linker.func_wrap("env", "abort", |mut caller: Caller<'_, ()>, msg: i32, filename: i32, line: i32, col: i32| -> () {
+        let mem = caller.get_export("memory")
+            .and_then(|m| m.into_memory())
+            .unwrap();
+        let data = mem.data(&caller);
+        let msg = get_string_impl(data, msg as usize);
+
+        println!("Abort: {:?} ({}, {})", msg, line, col);
+    })?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+    let run = instance.get_typed_func::<(i32,), i32, _>(&mut store, "run")?;
+    
+    let output = run.call(&mut store, (0,))? as usize;
+    let mod_mem = instance.get_memory(&mut store, "memory").expect("Expected module to export memory");
+
+    let pos = &mod_mem.data(&store)[output..(output+12)];
+    let (x, y, z):(u32, u32, u32) = (read_u32(&pos[0..4]), read_u32(&pos[4..8]), read_u32(&pos[8..12]));
+    println!("({}, {}, {})", x, y, z);
+    Ok(())
+}
+
+fn read_u32(bytes: &[u8]) -> u32 {
+    let mut dst = [0u8; 4];
+    dst.copy_from_slice(bytes);
+    unsafe { std::mem::transmute(dst) }
 }
 
 async fn ws_chunk(ws: WebSocketUpgrade) -> impl IntoResponse {

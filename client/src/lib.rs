@@ -13,7 +13,7 @@ mod fetch;
 mod render;
 use render::State;
 
-pub async fn run(event_loop: EventLoop<Message>, window: Window) {
+pub async fn run(event_loop: EventLoop<Message>, ws:web_sys::WebSocket, window: Window) {
     let mut state = State::new(&window).await;
 
     event_loop.run(move |event, _, control_flow| {
@@ -35,7 +35,9 @@ pub async fn run(event_loop: EventLoop<Message>, window: Window) {
                                 },
                                 ..
                         } => *control_flow = ControlFlow::Exit,
-                        _ => {},
+                        _ => {
+                            KeyEvent::
+                        },
                     };
                 },
             Event::RedrawRequested(window_id) if window_id == window.id() => {
@@ -64,7 +66,7 @@ pub async fn run(event_loop: EventLoop<Message>, window: Window) {
     });
 }
 
-pub fn start_websocket(event_loop: EventLoopProxy<Message>) -> Result<(), JsValue> {
+pub fn start_websocket(event_loop: EventLoopProxy<Message>) -> Result<web_sys::WebSocket, JsValue> {
     let ws = WebSocket::new("ws://192.168.0.163:3030/chunk")?;
 
     ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
@@ -97,7 +99,7 @@ pub fn start_websocket(event_loop: EventLoopProxy<Message>) -> Result<(), JsValu
     ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
     onopen_callback.forget();
 
-    Ok(())
+    Ok(ws)
 }
 
 #[cfg(test)]

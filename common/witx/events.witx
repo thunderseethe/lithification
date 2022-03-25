@@ -1,0 +1,16 @@
+(typename $key_code
+    (enum (@witx tag u32) $key_w
+    $key_a
+    $key_s
+    $key_d
+    $key_q
+    $key_e
+    $key_up
+    $key_right
+    $key_left
+    $key_down))
+
+(typename $key_event
+    (record
+        (field $key_code $key_code)
+        (field $is_pressed bool)))

@@ -178,7 +178,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn mesh_chunk2(
+    pub fn mesh_chunk(
         device: &wgpu::Device,
         chunk: &common::Chunk,
     ) -> Self {
@@ -311,7 +311,7 @@ impl Mesh {
         }
     }
 
-    pub fn mesh_chunk(
+    pub fn unused_mesh_chunk(
         device: &wgpu::Device,
         chunk: &common::Chunk,
     ) -> Self {

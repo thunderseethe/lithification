@@ -8,6 +8,7 @@ edition = "2021"
 members = ["client", "common"]
 
 [dependencies]
+anyhow = "1.0"
 axum = { version = "0.4.8", features = ["ws"] }
 futures-util="0.3"
 hyper = { version = "0.14", features = ["full"] }

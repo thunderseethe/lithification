@@ -1,5 +1,5 @@
 use std::cell::UnsafeCell;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 macro_rules! borrow_panic {
     ($s:expr) => {{
@@ -14,14 +14,17 @@ macro_rules! borrow_panic {
 /// Marker struct for an invalid borrow error
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct InvalidBorrow;
+use std::fmt::{Display, Formatter};
+use std::fmt;
+
 
 impl Display for InvalidBorrow {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "Tried to borrow when it was illegal")
     }
 }
 
-impl Error for InvalidBorrow {
+impl std::error::Error for InvalidBorrow {
     fn description(&self) -> &str {
         "This error is returned when you try to borrow immutably when it's already \
          borrowed mutably or you try to borrow mutably when it's already borrowed"
@@ -103,6 +106,8 @@ impl<'a, T: ?Sized> Ref<'a, T> {
         }
     }
 }
+
+use std::ops::{Deref, DerefMut};
 
 impl<'a, T: ?Sized> Deref for Ref<'a, T> {
     type Target = T;
@@ -192,7 +197,7 @@ impl<'a, T: ?Sized> RefMut<'a, T> {
         // the given `RefMut`, the lifetime we created through turning the
         // pointer into a ref is valid.
         let flag = unsafe { &*(self.flag as *const _) };
-        let value = unsafe { &*(self.value as *const _) };
+        let value = unsafe { &mut *(self.value as *mut _) };
 
         // We have to forget self so that we do not run `Drop`. Further it's safe
         // because we are creating a new `RefMut`, with the same flag, which

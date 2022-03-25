@@ -1,6 +1,8 @@
 use anyhow::*;
 use morton_encoding::*;
 
+mod witx;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Block {
     pub id: u32,
@@ -114,3 +116,4 @@ impl Message {
         })
     }
 }
+

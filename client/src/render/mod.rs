@@ -118,7 +118,7 @@ struct Camera {
 
 impl Camera {
     fn build_view_projection_matrix(&self) -> nalgebra::Matrix4<f32> {
-        let OPENGL_TO_WGPU_MATRIX: nalgebra::Matrix4<f32> =  
+        let opengl_to_wgpu_matrix: nalgebra::Matrix4<f32> =  
             [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.5, 0.0], [0.0, 0.0, 0.5, 1.0]].into();
         let view = nalgebra::Matrix4::look_at_rh(&self.eye, &self.target, &self.up);
         let proj = nalgebra::Matrix4::new_perspective(
@@ -126,15 +126,15 @@ impl Camera {
             self.fovy, 
             self.znear, 
             self.zfar);
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        return opengl_to_wgpu_matrix * proj * view;
     }
 }
 
-const INDICES: &[u16] = &[
+/*const INDICES: &[u16] = &[
     0, 1, 4,
     1, 2, 4,
     2, 3, 4,
-];
+];*/
 
 struct Instance {
     position: nalgebra::Vector3<f32>,
@@ -223,13 +223,13 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    num_indices: usize,
+    //num_indices: usize,
     material: model::Material,
     mesh: Option<model::Mesh>,
-    instances: Vec<Instance>,
+    //instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
-    obj_model: model::Model,
+    //obj_model: model::Model,
 }
 
 impl State {
@@ -449,11 +449,11 @@ impl State {
             });
 
         let chunk = Chunk::from_ele(Block { id: 0 });
-        let obj_model = model::Model::load(
+        /*let obj_model = model::Model::load(
             &device, 
             &queue, 
             &texture_bind_group_layout, 
-            "/cube.obj").await.unwrap();
+            "/cube.obj").await.unwrap();*/
 
         Self {
             surface,
@@ -468,17 +468,17 @@ impl State {
             config,
             size,
             render_pipeline,
-            num_indices: INDICES.len() as usize,
+            //num_indices: INDICES.len() as usize,
             material: model::Material {
                 name: "cobblestone".to_string(),
                 diffuse_texture,
                 bind_group: diffuse_bind_group,
             },
             mesh: None,
-            instances,
+            //instances,
             instance_buffer,
             depth_texture,
-            obj_model,
+            //obj_model,
         }
     }
 
@@ -505,7 +505,7 @@ impl State {
     }
 
     pub fn set_chunk(&mut self, chunk: Chunk) {
-        self.mesh = Some(model::Mesh::mesh_chunk2(&self.device, &chunk));
+        self.mesh = Some(model::Mesh::mesh_chunk(&self.device, &chunk));
         self.chunk = chunk;
         /*self.instances = self.chunk.coord_iter().filter_map(|(coord, block)| {
            if block.id == 0 {

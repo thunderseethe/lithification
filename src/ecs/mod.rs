@@ -1,10 +1,10 @@
-use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
+use std::any::Any;
 
 mod cell;
 use cell::TrustCell;
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct ResourceId(u32);
 
 pub trait Resource : Any + Send + Sync + 'static {}
@@ -26,16 +26,12 @@ impl World {
         self.resources.insert(id, TrustCell::new(Box::new(r)));
     }
 
-    pub fn remove<R>(&mut self, id: ResourceId) -> Option<R> 
-    where
-        R: Resource,
+    pub fn remove(&mut self, id: ResourceId) -> Option<Box<dyn Resource>>
     {
         self.resources
             .remove(&id)
             .map(TrustCell::into_inner)
-            .map(|x: Box<dyn Resource>| x.downcast())
-            .map(|x: Result<Box<R>, _>| x.ok().unwrap())
-            .map(|x| *x)
+            .map(|x: Box<dyn Resource>| x)
     }
 
     pub fn has_value(&self, id: ResourceId) -> bool

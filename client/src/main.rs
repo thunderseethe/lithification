@@ -20,7 +20,7 @@ fn main() {
         })
         .expect("couldn't append canvas to document body");
 
-    start_websocket(event_loop.create_proxy()).expect("WebSocket to start successfully");
+    let ws = start_websocket(event_loop.create_proxy()).expect("WebSocket to start successfully");
 
-    wasm_bindgen_futures::spawn_local(run(event_loop, window));
+    wasm_bindgen_futures::spawn_local(run(event_loop, ws, window));
 }
