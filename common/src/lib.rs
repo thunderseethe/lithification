@@ -1,5 +1,6 @@
 use anyhow::*;
 use morton_encoding::*;
+use nalgebra as na;
 
 mod witx;
 
@@ -71,7 +72,7 @@ impl Chunk {
         self.0.iter()
     }
 
-    pub fn coord_iter(&self) -> impl Iterator<Item=(nalgebra::Point3<u8>, &Block)> {
+    pub fn coord_iter(&self) -> impl Iterator<Item=(na::Point3<u8>, &Block)> {
         self.0.iter().enumerate().map(|(i, block)| {
             let coords: [u8; 3] = morton_decode(i as u32);
             (coords.into(), block)
@@ -85,6 +86,16 @@ pub struct Message {
     pub bytes: Vec<u8>,
 }
 impl Message {
+
+    pub fn with_tag<T>(tag: &T) -> Self 
+    where
+        T: ?Sized + std::borrow::ToOwned<Owned=String>,
+    {
+        Self {
+            tag: tag.to_owned(),
+            bytes: vec![],
+        }
+    }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(self.tag.len() + self.bytes.len() + 4);
@@ -117,3 +128,37 @@ impl Message {
     }
 }
 
+
+pub struct PlayerPosition(na::Point3<f32>);
+
+impl PlayerPosition {
+    pub fn new() -> Self {
+        Self(na::Point3::origin())
+    }
+
+    pub fn add(&mut self, x: f32, y: f32, z: f32) {
+        self.0 += na::Vector3::<f32>::new(x, y, z);
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(std::mem::size_of::<f32>() * 3);
+
+        bytes.extend(bytemuck::bytes_of(&self.0.x));
+        bytes.extend(bytemuck::bytes_of(&self.0.y));
+        bytes.extend(bytemuck::bytes_of(&self.0.z));
+
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        if bytes.len() < std::mem::size_of::<f32>() * 3 {
+            return Err(anyhow::anyhow!("Expected atleast {} bytes to construct PlayerPosition", std::mem::size_of::<f32>() * 3));
+        }
+
+        let x: f32= *bytemuck::from_bytes(&bytes[0..4]);
+        let y: f32= *bytemuck::from_bytes(&bytes[4..8]);
+        let z: f32= *bytemuck::from_bytes(&bytes[8..12]);
+    
+        Ok(Self(na::Point3::new(x, y, z)))
+    }
+}

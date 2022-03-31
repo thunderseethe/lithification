@@ -9,14 +9,20 @@ pub struct ResourceId(u32);
 
 pub trait Resource : Any + Send + Sync + 'static {}
 
+pub struct Entity {
+    generation: u32,
+    id: u32,
+}
+
 #[derive(Default)]
 pub struct World {
+    entities: Vec<Entity>,
     resources: HashMap<ResourceId, TrustCell<Box<dyn Resource>>>,
 }
 
 impl World {
     pub fn empty() -> Self {
-        Default::default()
+        Self::default()
     }
 
     pub fn insert<R>(&mut self, id: ResourceId, r: R)

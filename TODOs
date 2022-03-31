@@ -1,1 +1,17 @@
-Greedy face combining in Mesh
+* Greedy face combining in Mesh
+
+* What does a module look like?
+  * Needs client and server component
+  * Registers info with core
+    * Register resources
+    * Register component
+    * Register events?
+
+Do we need to register resources vs simply putting bytes in place?
+  Need a standard memory layout that all client languages need to be able to consume
+
+How to represent a system in WASM?
+  `export fn run(reads: Read<SomeShit>, writes: Write<SomeOtherShit>)`
+  Query exported signature to determine what it needs each run and schedule it?
+  Each client language needs to support types like `Read<SomeShit>`, or `Write<SomeOtherShit>`.
+  Is that info even availabe to host?

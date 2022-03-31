@@ -13,33 +13,53 @@ mod fetch;
 mod render;
 use render::State;
 
-pub async fn run(event_loop: EventLoop<Message>, ws:web_sys::WebSocket, window: Window) {
+pub fn to_msg(keycode: VirtualKeyCode) -> Option<common::Message> {
+    match keycode {
+        VirtualKeyCode::A | VirtualKeyCode::Left => Some(Message::with_tag("player_left")),
+        VirtualKeyCode::D | VirtualKeyCode::Right => Some(Message::with_tag("player_right")),
+        VirtualKeyCode::W | VirtualKeyCode::Up => Some(Message::with_tag("player_forward")),
+        VirtualKeyCode::S | VirtualKeyCode::Down => Some(Message::with_tag("player_backward")),
+        VirtualKeyCode::Q => Some(Message::with_tag("player_up")),
+        VirtualKeyCode::E => Some(Message::with_tag("player_down")),
+        _ => None,
+    }
+}
+
+pub async fn run(event_loop: EventLoop<Message>, ws: web_sys::WebSocket, window: Window) {
     let mut state = State::new(&window).await;
 
     event_loop.run(move |event, _, control_flow| {
         //*control_flow = ControlFlow::Wait;
         match event {
-            Event::WindowEvent {event, window_id} if window_id == window.id() => 
-                if !state.input(&event) {
-                    match event {
-                        WindowEvent::Resized(size) => 
-                            state.resize(size),
-                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => 
-                            state.resize(*new_inner_size),
-                        WindowEvent::CloseRequested 
-                        | WindowEvent::KeyboardInput {
-                                input: KeyboardInput {
-                                    state: ElementState::Pressed,
-                                    virtual_keycode: Some(VirtualKeyCode::Escape),
-                                    ..
-                                },
+            Event::WindowEvent {event, window_id} if window_id == window.id() => {
+                state.input(&event);
+                match event {
+                    WindowEvent::Resized(size) => 
+                        state.resize(size),
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => 
+                        state.resize(*new_inner_size),
+                    WindowEvent::CloseRequested 
+                    | WindowEvent::KeyboardInput {
+                            input: KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
                                 ..
-                        } => *control_flow = ControlFlow::Exit,
-                        _ => {
-                            KeyEvent::
-                        },
-                    };
-                },
+                            },
+                            ..
+                    } => *control_flow = ControlFlow::Exit,
+                    WindowEvent::KeyboardInput { input: KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    }, .. } => {
+                        if let Some(msg) = to_msg(keycode) {
+                            let bytes = msg.to_bytes();
+                            ws.send_with_u8_array(&bytes[..]).expect("Failed to send message for keycode");
+                        }
+                    },
+                    _ => {},
+                };
+            },
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 state.update();
                 match state.render() {
@@ -54,6 +74,9 @@ pub async fn run(event_loop: EventLoop<Message>, ws:web_sys::WebSocket, window: 
                     let chunk = Chunk::from_bytes(&msg.bytes).expect("Failed to parse chunk out of message payload");
                     log::info!("Received Chunk {:?}", chunk); 
                     state.set_chunk(chunk);
+                }
+                if msg.tag == "player_position" {
+                    
                 }
             }
             Event::MainEventsCleared => {
@@ -91,8 +114,9 @@ pub fn start_websocket(event_loop: EventLoopProxy<Message>) -> Result<web_sys::W
     let cloned_ws = ws.clone();
     let onopen_callback = Closure::wrap(Box::new(move |_| {
         log::info!("socket opened");
-        match cloned_ws.send_with_str("give me chunk") {
-            Ok(_) => {},
+        let msg = common::Message::with_tag("sphere_chunk");
+        match cloned_ws.send_with_u8_array(&msg.to_bytes()) {
+            Ok(_) => { log::info!("sent message: {:?}", msg); },
             Err(err) => log::error!("error sending message: {:?}", err),
         }
     }) as Box<dyn FnMut(JsValue)>);

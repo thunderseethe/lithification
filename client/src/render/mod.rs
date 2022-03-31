@@ -5,6 +5,7 @@ use winit::{
 };
 use wgpu::util::DeviceExt;
 
+mod camera;
 mod model;
 use model::Vertex;
 
@@ -103,30 +104,6 @@ impl CameraController {
             camera.eye -= nalgebra::Vector3::y_axis().into_inner() * self.speed;
             camera.target -= nalgebra::Vector3::y_axis().into_inner() * self.speed;
         }
-    }
-}
-
-struct Camera {
-    eye: nalgebra::Point3<f32>,
-    target: nalgebra::Point3<f32>,
-    up: nalgebra::Vector3<f32>,
-    aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
-}
-
-impl Camera {
-    fn build_view_projection_matrix(&self) -> nalgebra::Matrix4<f32> {
-        let opengl_to_wgpu_matrix: nalgebra::Matrix4<f32> =  
-            [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.5, 0.0], [0.0, 0.0, 0.5, 1.0]].into();
-        let view = nalgebra::Matrix4::look_at_rh(&self.eye, &self.target, &self.up);
-        let proj = nalgebra::Matrix4::new_perspective(
-            self.aspect, 
-            self.fovy, 
-            self.znear, 
-            self.zfar);
-        return opengl_to_wgpu_matrix * proj * view;
     }
 }
 

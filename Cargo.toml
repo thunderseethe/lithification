@@ -6,16 +6,22 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
 members = ["client", "common"]
+exclude = ["mods/*"]
 
 [dependencies]
 anyhow = "1.0"
 axum = { version = "0.4.8", features = ["ws"] }
 futures-util="0.3"
 hyper = { version = "0.14", features = ["full"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "sync"] }
 tower = "0.4"
 tower-http = { version = "0.2", features = ["fs"] }
 wasmtime = "0.35"
+parking_lot = "0.12.0"
+log = "0.4.16"
+simple_logger = "2.1.0"
+nalgebra = "0.30.1"
+wasmer = "2.2.1"
 
 [dependencies.common]
 path = "./common"
