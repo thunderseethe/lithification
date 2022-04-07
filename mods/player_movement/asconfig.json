@@ -19,8 +19,6 @@
   "options": {
     "runtime": "stub",
     "importMemory": true,
-    "sharedMemory": true,
-    "maximumMemory": 100,
     "enable": ["threads"]
   }
 }

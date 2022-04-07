@@ -22,9 +22,11 @@ log = "0.4.16"
 simple_logger = "2.1.0"
 nalgebra = "0.30.1"
 wasmer = "2.2.1"
+intaglio = "1.6.0"
 
 [dependencies.common]
 path = "./common"
+
 
 [build-dependencies]
 anyhow = "1.0"

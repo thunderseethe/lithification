@@ -1,30 +1,32 @@
-use nalgebra as na;
+#[no_mangle]
+pub static GLOBAL_TRANSFORM_SIZE: usize = std::mem::size_of::<GlobalTransform>();
 
 #[repr(C)]
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct GlobalTransform {
-    pub isometry: na::Isometry3<f32>,
-    pub scale: na::Vector3<f32>,
+    affine: glam::Affine3A,
 }
 
 impl GlobalTransform {
     #[no_mangle]
-    pub fn new(
-        position: na::Translation3<f32>,
-        rotation: na::UnitQuaternion<f32>,
-        scale: na::Vector3<f32>,
+    pub fn new_global_transform(
+        position: glam::Vec3,
+        rotation: glam::Quat,
+        scale: glam::Vec3,
     ) -> Self {
         Self {
-            isometry: na::Isometry3::from_parts(position, rotation),
-            scale,
+            affine: glam::Affine3A::from_scale_rotation_translation(
+                scale,
+                rotation,
+                position
+            )
         }
     }
 
     #[no_mangle]
-    pub fn identity() -> Self {
+    pub fn global_transform_identity() -> Self {
         Self {
-            isometry: na::Isometry3::identity(),
-            scale: na::Vector3::new(1.0, 1.0, 1.0),
+            affine: glam::Affine3A::IDENTITY,
         }
     }
 
@@ -32,33 +34,46 @@ impl GlobalTransform {
     #[inline]
     #[must_use]
     #[no_mangle]
-    pub fn matrix(&self) -> na::Matrix4<f32> {
-        self.isometry
-            .to_homogeneous()
-            .prepend_nonuniform_scaling(&self.scale)
+    pub fn matrix(&self) -> glam::Mat4 {
+        glam::Mat4::from(self.affine)
     }
 
     #[inline]
     #[no_mangle]
-    pub fn prepend_translation(&mut self, translation: na::Vector3<f32>) -> &mut Self {
-        self.isometry.translation.vector += translation;
+    pub fn prepend_translation(&mut self, translation: glam::Vec3A) -> &mut Self {
+        self.affine.translation += translation;
         self
     }
 
     #[inline]
     #[no_mangle]
-    pub fn append_translation(&mut self, translation: na::Vector3<f32>) -> &mut Self {
-        self.isometry.translation.vector += self.isometry.rotation * translation;
+    pub fn append_translation(&mut self, translation: glam::Vec3A) -> &mut Self {
+        self.affine.translation += self.affine.matrix3 * translation;
         self
     }
 }
 
 #[no_mangle]
-pub fn new_vec3(x: f32, y: f32, z: f32) -> na::Vector3<f32> {
-    na::Vector3::new(x, y, z)
+pub fn new_vec3(x: f32, y: f32, z: f32) -> glam::Vec3 {
+    glam::Vec3::new(x, y, z)
 }
 
 #[no_mangle]
-pub fn new_vec3_i32(x: i32, y: i32, z: i32) -> na::Vector3<i32> {
-    na::Vector3::new(x, y, z)
+pub fn vec3_x_axis() -> glam::Vec3 {
+    glam::Vec3::X
 }
+
+#[no_mangle]
+pub fn vec3_y_axis() -> glam::Vec3 {
+    glam::Vec3::Y
+}
+
+#[no_mangle]
+pub fn vec3_z_axis() -> glam::Vec3 {
+    glam::Vec3::Z
+}
+
+pub fn quat_id() -> glam::Quat {
+    glam::Quat::IDENTITY
+}
+

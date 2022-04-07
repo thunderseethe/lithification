@@ -82,14 +82,12 @@ impl Chunk {
 
 #[derive(Debug)]
 pub struct Message {
-    pub tag: String,
+    pub tag: u32,
     pub bytes: Vec<u8>,
 }
 impl Message {
 
-    pub fn with_tag<T>(tag: &T) -> Self 
-    where
-        T: ?Sized + std::borrow::ToOwned<Owned=String>,
+    pub fn with_tag(tag: u32) -> Self 
     {
         Self {
             tag: tag.to_owned(),
@@ -98,28 +96,23 @@ impl Message {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(self.tag.len() + self.bytes.len() + 4);
-        let tag_len = self.tag.len() as u32;
+        let mut bytes = Vec::with_capacity(self.bytes.len() + 4 + 4);
 
-        bytes.extend(bytemuck::bytes_of(&tag_len));
-        bytes.extend(self.tag.as_bytes());
+        let bytes_len = self.bytes.len() as u32;
+        bytes.extend(bytemuck::bytes_of(&self.tag));
+        bytes.extend(bytemuck::bytes_of(&bytes_len));
         bytes.extend(&self.bytes[..]);
         bytes
     }
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        if bytes.len() < 4 {
-            return Err(anyhow!("Expected at least 4 bytes of input"));
+        if bytes.len() < 8 {
+            return Err(anyhow!("Expected at least 8 bytes of input"));
         }
-        let len: u32 = *bytemuck::from_bytes(&bytes[0..4]);
-        log::info!("tag length {}", len);
-        let msg_offset: usize = 4 + len as usize;
-        if bytes.len() < msg_offset {
-            return Err(anyhow!("Expected message to contain tag string"));
-        }
-        let tag = String::from_utf8(bytes[4..msg_offset].to_owned())?;
+        let tag: u32 = *bytemuck::from_bytes(&bytes[0..4]);
+        let bytes_len: u32 = *bytemuck::from_bytes(&bytes[4..8]);
         log::info!("tag {:?}", tag);
-        let payload = bytes[msg_offset..].to_owned();
+        let payload = bytes[8..(8 + bytes_len as usize)].to_owned();
         
         Ok(Message {
             tag,
@@ -127,7 +120,6 @@ impl Message {
         })
     }
 }
-
 
 pub struct PlayerPosition(na::Point3<f32>);
 

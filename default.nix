@@ -5,5 +5,6 @@ pkgs.mkShell {
     wasm-bindgen-cli
     shaderc
     spirv-tools
+    nodejs
   ];
 } 

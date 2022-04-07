@@ -6,16 +6,17 @@ use axum::{
     response::IntoResponse, Server,
 };
 use hyper::server::conn::AddrIncoming;
+use wasmer::LazyInit;
 use std::{
     net::SocketAddr,
 };
 use tower_http::services::ServeDir;
 use tokio::sync::mpsc;
 use std::sync::Arc;
-use parking_lot::Mutex;
+use parking_lot::{RwLock, Mutex};
 
 use common::{Block, Chunk};
-use wasmtime::*;
+//use wasmtime::*;
 
 mod ecs;
 
@@ -31,7 +32,7 @@ fn server(outgoing_receiver: Arc<Mutex<mpsc::Receiver<common::Message>>>, incomi
         .serve(app.into_make_service_with_connect_info::<SocketAddr, _>())
 }
 
-fn handle_msg(msg: common::Message, player_position: &mut common::PlayerPosition, outgoing_message: &mut Vec<common::Message>) {
+/*fn handle_msg(msg: common::Message, player_position: &mut common::PlayerPosition, outgoing_message: &mut Vec<common::Message>) {
     if msg.tag == "sphere_chunk" {
         let chunk_half_dim = (Chunk::DIMENSION/2) as i16;
         let chunk_sphere_threshold = chunk_half_dim * chunk_half_dim;
@@ -97,10 +98,47 @@ fn handle_msg(msg: common::Message, player_position: &mut common::PlayerPosition
             bytes: player_position.to_bytes(),
         })
     }
+}*/
+
+use wasmer::*;
+
+#[derive(WasmerEnv, Debug, Clone, Default)]
+struct Env {
+    symbols: Arc<RwLock<intaglio::SymbolTable>>,
+    #[wasmer(export)]
+    memory: LazyInit<wasmer::Memory>,
 }
 
-async fn initialize_wasm() -> Result<wasmer::> {
+mod host {
+    use std::cell::Cell;
 
+    use crate::Env;
+
+    pub(super) fn is_event(env: &Env, msg_ptr: u32, event_sym: u32) -> u32 {
+        let mem = env.memory_ref().expect("Expected memory export");
+        let msg = unsafe { common::Message::from_bytes(&mem.data_unchecked()[msg_ptr as usize..]).expect("Could not deserialize message from ") };
+        return (msg.tag == intaglio::Symbol::new(event_sym)) as u32;
+    }
+
+    pub(super) fn intern_string(env: &Env, str_ptr: u32, str_u16_len: u32) -> u32 {
+        let mem = env.memory_ref().expect("Expected memory export");
+        let mem_view: wasmer::MemoryView<u16> = mem.view().subarray(
+            str_ptr,
+             str_ptr + str_u16_len * 2); // We need to multiply str_len by 2 to get len in u8s
+        let str_slice: &[Cell<u16>] = &*mem_view;
+        let str_slice: &[u16] = unsafe { std::mem::transmute(str_slice) };
+        let sym = env.symbols.write().intern(String::from_utf16_lossy(str_slice)).expect("SymbolTable overflowed");
+        sym.id()
+    }
+
+    pub(super) fn message_empty(env: &Env, msg_ptr: u32) {
+        let msg = common::Message {
+            tag: 0,
+            bytes: vec![],
+        };
+        
+        
+    }
 }
 
 #[tokio::main]
@@ -110,22 +148,54 @@ async fn main() {
         .init()
         .unwrap();
 
-    initialize_wasm().await.expect("Wasm Error");
-
     let (outgoing_sender, outgoing_receiver) = mpsc::channel::<common::Message>(100);
     let (incoming_sender, mut incoming_receiver) = mpsc::channel::<common::Message>(100);
     let outgoing_receiver = Arc::new(Mutex::new(outgoing_receiver));
 
     let server_handle = server(outgoing_receiver, incoming_sender);
 
-    //let engine = Engine::new(
-    //    Config::new()
-    //        .wasm_module_linking(true)
-    //        .wasm_multi_memory(true)).expect("Failed to initialize wasm");
+    let env = Env::default();
 
+    let mut cranelift = Cranelift::new();
+    cranelift.canonicalize_nans(true);
 
+    let mut features = Features::new();
+    features.module_linking(true)
+        .multi_value(true)
+        .tail_call(true)
+        .threads(true);
 
-    let mut player_position = common::PlayerPosition::new();
+    let store = Store::new(&UniversalEngine::new(
+        Cranelift::compiler(Box::new(cranelift)),
+        Target::new(wasmer::HOST, CpuFeature::for_host()),
+        features,
+    ));
+
+    fn env_abort(msg: u32, file_name: u32, line: u32, column: u32) {
+        // pass for now
+        log::error!("wasm abort");
+    }
+
+    let math_mod = Module::from_file(&store, "mods/math/out/math.opt.wasm").expect("Could not create math module");
+    let math_instance = Instance::new(&math_mod, &imports!{}).expect("Could not create math instance");
+    
+    let mut imports = imports! {
+        "env" => {
+            "abort" => Function::new_native(&store, env_abort),
+        },
+        "host" => {
+            "is_event" => Function::new_native_with_env(&store, env.clone(), host::is_event),
+            "message_empty" => Function::new_native_with_env(&store, env.clone(), host::message_empty),
+            "intern_string" => Function::new_native_with_env(&store, env, host::intern_string), 
+            "MESSAGE_SIZE" => Global::new(&store, Value::I32(std::mem::size_of::<common::Message> as i32)),
+        },
+    };
+    imports.register("math", math_instance.exports);
+
+    let player_movement_mod = Module::from_file(&store, "mods/player_movement/build/optimized.wasm").expect("Could not create math module");
+    let player_move_instance = Instance::new(&player_movement_mod, &imports).expect("Could not instantiate player_movement module");
+
+    //let mut player_position = common::PlayerPosition::new();
     let game_loop = tokio::spawn(async move {
         log::info!("Started game loop...");
         let mut outgoing_message: Vec<common::Message> = Vec::with_capacity(9);
@@ -143,7 +213,10 @@ async fn main() {
             // Clear out any lingering messages from last loop
             outgoing_message.clear();
             
-            handle_msg(msg, &mut player_position, &mut outgoing_message);
+            let mem = player_move_instance.exports.get_memory("memory").expect("player_movement mod didn't export memory");
+            
+            
+            //handle_msg(msg, &mut player_position, &mut outgoing_message);
 
             for msg in outgoing_message.drain(..) {
                 if let Err(e) = outgoing_sender.send(msg).await {
