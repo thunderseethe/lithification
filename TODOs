@@ -16,6 +16,9 @@ How to represent a system in WASM?
   Each client language needs to support types like `Read<SomeShit>`, or `Write<SomeOtherShit>`.
   Is that info even availabe to host?
 
+Currently our sole mod (player_movement) directly imports it's dependencies (host or math component). That is not scalable.
+  * Wrap dependencies up as their own crate that include some language specific comforts (trait impls, generics, etc.) and only expose the relevant part of the API
+    * Currently because player_movement generates it's own dep interface it owns the generated data types (EventId, ResourceId, etc.) and can make use of their internal repr which opens the door for bugs if those types are misconstructed. A separate crates let's us prevent that from happening.
 
 Simple resource management is in place as a naive map from ResourceId -> Vec<u8>. This is fine for now but will most likey be too slow long term (we incur a copy at every write/read boundary between module and host). 
 

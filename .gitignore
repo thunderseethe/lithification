@@ -6,3 +6,4 @@
 **/generated
 **/node_modules
 mods/**/build/
+**/bindings.rs
