@@ -1,0 +1,13 @@
+
+record %resource {
+  repr: list<u8>,
+}
+
+record resource-id {
+    id: u32
+}
+
+init-resource: function(resource-name: string, res: %resource) -> resource-id
+lookup-resource: function(resource-name: string) -> option<resource-id>
+get-resource: function(resource-id: resource-id) -> %resource
+write-resource: function(resource-id: resource-id, res: %resource)

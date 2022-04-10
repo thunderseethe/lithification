@@ -15,3 +15,21 @@ How to represent a system in WASM?
   Query exported signature to determine what it needs each run and schedule it?
   Each client language needs to support types like `Read<SomeShit>`, or `Write<SomeOtherShit>`.
   Is that info even availabe to host?
+
+
+Simple resource management is in place as a naive map from ResourceId -> Vec<u8>. This is fine for now but will most likey be too slow long term (we incur a copy at every write/read boundary between module and host). 
+
+A more complicated but hopefully more performant ID is to make a custom allocator for our Resources using the nightly allocator_api feature.
+  * At minimum this presents a nicer API to consumers (no need for a bunch of get_resource/write_resource calls)
+  * We can try to expose a safe segement of host memory under the hood that resources allocate into more directly, idea here is to save copies for read/writes
+  * This presents memory management issues?
+    * Once we graduate from a map to a heap we have to worry about reallocs and free (will we ever actaull free this heap?)
+  * Long term the ideal outcome of this is our Allocator would wrap a separate wasm memory instance entirely using the multi_memory proposal.
+    * Look into using asm!/llvm_asm! to generate wasm directly that might be able to do this already?
+    * If we generate inline asm we need to also add an import for the separate resource linear memory, we might have to do this by fiddling with the wasm at load time. But hopefully there's a way to get the rust compiler to emit it eventually
+
+At what point are the machinations we jump through to get rust to emit the wasm we want more painful then making a DSL that has more direct control over the wasm produced?
+  * Lispy syntax that lowers very directly into wasm primitives
+  * Support for wit types as language items
+  * Straightforward never-free allocation strategy since memory is managed for us and any persistent memory has to be codified as a resource
+  * Would allow us to work with Globals and experimental wasm features more directly then rust will

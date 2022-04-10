@@ -1,0 +1,17 @@
+[package]
+name = "player_movement"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+
+[workspace]
+
+[dependencies]
+bytemuck = "1.9.1"
+wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "d086240c74eabae6f225c90c74d705fe10f2d8dc" }
+#rev = "32e63116d469d8046727fae3c1333a7d35d0c5d3" }

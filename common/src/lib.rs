@@ -1,6 +1,7 @@
 use anyhow::*;
 use morton_encoding::*;
 use nalgebra as na;
+use string_interner::symbol::Symbol;
 
 mod witx;
 
@@ -82,15 +83,15 @@ impl Chunk {
 
 #[derive(Debug)]
 pub struct Message {
-    pub tag: u32,
+    pub tag: string_interner::symbol::SymbolU32,
     pub bytes: Vec<u8>,
 }
 impl Message {
 
-    pub fn with_tag(tag: u32) -> Self 
+    pub fn with_tag(tag: string_interner::symbol::SymbolU32) -> Self 
     {
         Self {
-            tag: tag.to_owned(),
+            tag: tag,
             bytes: vec![],
         }
     }
@@ -98,8 +99,9 @@ impl Message {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(self.bytes.len() + 4 + 4);
 
+        let tag_u32 = self.tag.to_usize() as u32;
         let bytes_len = self.bytes.len() as u32;
-        bytes.extend(bytemuck::bytes_of(&self.tag));
+        bytes.extend(bytemuck::bytes_of(&tag_u32));
         bytes.extend(bytemuck::bytes_of(&bytes_len));
         bytes.extend(&self.bytes[..]);
         bytes
@@ -115,7 +117,8 @@ impl Message {
         let payload = bytes[8..(8 + bytes_len as usize)].to_owned();
         
         Ok(Message {
-            tag,
+            // We know tag fits in a u32 so try_from_usize can't fail
+            tag: string_interner::symbol::SymbolU32::try_from_usize(tag as usize).unwrap(),
             bytes: payload,
         })
     }

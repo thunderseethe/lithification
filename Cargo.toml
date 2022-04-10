@@ -15,14 +15,17 @@ futures-util="0.3"
 hyper = { version = "0.14", features = ["full"] }
 tokio = { version = "1", features = ["full", "sync"] }
 tower = "0.4"
-tower-http = { version = "0.2", features = ["fs"] }
-wasmtime = "0.35"
+tower-http = { version = "0.2", features = ["fs", "compression-br"] }
+wasmtime = "0.34"
 parking_lot = "0.12.0"
 log = "0.4.16"
 simple_logger = "2.1.0"
-nalgebra = "0.30.1"
+#nalgebra = "0.30.1"
 wasmer = "2.2.1"
-intaglio = "1.6.0"
+string-interner = "0.14.0"
+bincode = "1.3.3"
+wit-bindgen-wasmtime = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "d086240c74eabae6f225c90c74d705fe10f2d8dc" }
+serde = "1.0.136"
 
 [dependencies.common]
 path = "./common"

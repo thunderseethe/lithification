@@ -1,0 +1,13 @@
+record event-id {
+  id: u32,
+}
+
+new-event-id: function(s: string) -> event-id
+event-id-eq: function(this: event-id, other: event-id) -> bool
+
+record message {
+  tag: event-id,
+  data: list<u8>,
+}
+
+new-message: function(tag: event-id, data: list<u8>) -> message

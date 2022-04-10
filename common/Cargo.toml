@@ -12,6 +12,7 @@ log = "0.4"
 morton-encoding = "2.0"
 nalgebra = "0.30"
 num-traits = "0.2.14"
+string-interner = "0.14.0"
 
 #[dependencies.wiggle]
 #path = "../../wasmtime/crates/wiggle"

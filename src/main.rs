@@ -5,25 +5,27 @@ use axum::{
     routing::{get, get_service},
     response::IntoResponse, Server,
 };
-use hyper::server::conn::AddrIncoming;
-use wasmer::LazyInit;
+use hyper::{server::conn::AddrIncoming};
 use std::{
     net::SocketAddr,
 };
-use tower_http::services::ServeDir;
+use tower_http::{services::ServeDir, compression::CompressionLayer};
 use tokio::sync::mpsc;
 use std::sync::Arc;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::Mutex;
 
-use common::{Block, Chunk};
-//use wasmtime::*;
+use wasmtime::*;
 
-mod ecs;
+//mod ecs;
+mod event;
+mod resources;
+mod world;
 
-fn server(outgoing_receiver: Arc<Mutex<mpsc::Receiver<common::Message>>>, incoming_sender: mpsc::Sender<common::Message>) -> Server<AddrIncoming, IntoMakeServiceWithConnectInfo<Router, std::net::SocketAddr>> {
+fn server(binary_blob: Vec<u8>, outgoing_receiver: Arc<Mutex<mpsc::Receiver<common::Message>>>, incoming_sender: mpsc::Sender<common::Message>) -> Server<AddrIncoming, IntoMakeServiceWithConnectInfo<Router, std::net::SocketAddr>> {
     let serve_generated_dir = get_service(ServeDir::new("generated"));
     let app = Router::new()
         .route("/chunk", get(move |ws| ws_chunk(ws, outgoing_receiver, incoming_sender)))
+        .route("/blob", get(move || async { binary_blob }).layer(CompressionLayer::new()))
         .fallback(HandleError::new(serve_generated_dir, err_handle));
 
     let socket_addr = "192.168.0.163:3030".parse().unwrap();
@@ -32,112 +34,15 @@ fn server(outgoing_receiver: Arc<Mutex<mpsc::Receiver<common::Message>>>, incomi
         .serve(app.into_make_service_with_connect_info::<SocketAddr, _>())
 }
 
-/*fn handle_msg(msg: common::Message, player_position: &mut common::PlayerPosition, outgoing_message: &mut Vec<common::Message>) {
-    if msg.tag == "sphere_chunk" {
-        let chunk_half_dim = (Chunk::DIMENSION/2) as i16;
-        let chunk_sphere_threshold = chunk_half_dim * chunk_half_dim;
-        let chunk = Chunk::from_fn(|x: u8, y: u8, z:u8| {
-            let x2 = (x as i16) - chunk_half_dim;
-            let x2 = x2 * x2;
-            let y2 = (y as i16) - chunk_half_dim;
-            let y2 = y2 * y2;
-            let z2 = (z as i16) - chunk_half_dim;
-            let z2 = z2 * z2;
 
-            if x2 + y2 + z2 < chunk_sphere_threshold {
-                Block::new(1)
-            } else {
-                Block::new(0)
-            }
-        });
-            
-        outgoing_message.push(common::Message {
-            tag: "chunk".to_owned(),
-            bytes: chunk.to_bytes(),
-        });
-    }
-    else if msg.tag == "player_backward" {
-        player_position.add(0.0, 0.0, 1.0);
-        outgoing_message.push(common::Message {
-            tag: "player_position".to_owned(),
-            bytes: player_position.to_bytes(),
-        })
-    }
-    else if msg.tag == "player_forward" {
-        player_position.add(0.0, 0.0, -1.0);
-        outgoing_message.push(common::Message {
-            tag: "player_position".to_owned(),
-            bytes: player_position.to_bytes(),
-        })
-    }
-    else if msg.tag == "player_up" {
-        player_position.add(0.0, 1.0, 0.0);
-        outgoing_message.push(common::Message {
-            tag: "player_position".to_owned(),
-            bytes: player_position.to_bytes(),
-        })
-    }
-    else if msg.tag == "player_down" {
-        player_position.add(0.0, -1.0, 0.0);
-        outgoing_message.push(common::Message {
-            tag: "player_position".to_owned(),
-            bytes: player_position.to_bytes(),
-        })
-    }
-    else if msg.tag == "player_right" {
-        player_position.add(0.0, 1.0, 0.0);
-        outgoing_message.push(common::Message {
-            tag: "player_position".to_owned(),
-            bytes: player_position.to_bytes(),
-        })
-    }
-    else if msg.tag == "player_left" {
-        player_position.add(-1.0, 0.0, 0.0);
-        outgoing_message.push(common::Message {
-            tag: "player_position".to_owned(),
-            bytes: player_position.to_bytes(),
-        })
-    }
-}*/
-
-use wasmer::*;
-
-#[derive(WasmerEnv, Debug, Clone, Default)]
 struct Env {
-    symbols: Arc<RwLock<intaglio::SymbolTable>>,
-    #[wasmer(export)]
-    memory: LazyInit<wasmer::Memory>,
+    event: event::Event,
 }
-
-mod host {
-    use std::cell::Cell;
-
-    use crate::Env;
-
-    pub(super) fn is_event(env: &Env, msg_ptr: u32, event_sym: u32) -> u32 {
-        let mem = env.memory_ref().expect("Expected memory export");
-        let msg = unsafe { common::Message::from_bytes(&mem.data_unchecked()[msg_ptr as usize..]).expect("Could not deserialize message from ") };
-        return (msg.tag == intaglio::Symbol::new(event_sym)) as u32;
-    }
-
-    pub(super) fn intern_string(env: &Env, str_ptr: u32, str_u16_len: u32) -> u32 {
-        let mem = env.memory_ref().expect("Expected memory export");
-        let mem_view: wasmer::MemoryView<u16> = mem.view().subarray(
-            str_ptr,
-             str_ptr + str_u16_len * 2); // We need to multiply str_len by 2 to get len in u8s
-        let str_slice: &[Cell<u16>] = &*mem_view;
-        let str_slice: &[u16] = unsafe { std::mem::transmute(str_slice) };
-        let sym = env.symbols.write().intern(String::from_utf16_lossy(str_slice)).expect("SymbolTable overflowed");
-        sym.id()
-    }
-
-    pub(super) fn message_empty(env: &Env, msg_ptr: u32) {
-        let msg = common::Message {
-            tag: 0,
-            bytes: vec![],
-        };
-        
-        
+impl Env {
+    fn new() -> Self {
+        Self {
+            event: event::Event::new(),
+        }
     }
 }
 
@@ -152,9 +57,7 @@ async fn main() {
     let (incoming_sender, mut incoming_receiver) = mpsc::channel::<common::Message>(100);
     let outgoing_receiver = Arc::new(Mutex::new(outgoing_receiver));
 
-    let server_handle = server(outgoing_receiver, incoming_sender);
-
-    let env = Env::default();
+    /*let env = Env::default();
 
     let mut cranelift = Cranelift::new();
     cranelift.canonicalize_nans(true);
@@ -171,11 +74,11 @@ async fn main() {
         features,
     ));
 
-    fn env_abort(msg: u32, file_name: u32, line: u32, column: u32) {
+    fn env_abort(_msg: u32, _file_name: u32, _line: u32, _column: u32) {
         // pass for now
         log::error!("wasm abort");
     }
-
+ 
     let math_mod = Module::from_file(&store, "mods/math/out/math.opt.wasm").expect("Could not create math module");
     let math_instance = Instance::new(&math_mod, &imports!{}).expect("Could not create math instance");
     
@@ -186,16 +89,42 @@ async fn main() {
         "host" => {
             "is_event" => Function::new_native_with_env(&store, env.clone(), host::is_event),
             "message_empty" => Function::new_native_with_env(&store, env.clone(), host::message_empty),
-            "intern_string" => Function::new_native_with_env(&store, env, host::intern_string), 
+            "intern_string" => Function::new_native_with_env(&store, env.clone(), host::intern_string), 
+            "register_resource_inner" => Function::new_native_with_env(&store, env.clone(), host::register_resource_inner),
             "MESSAGE_SIZE" => Global::new(&store, Value::I32(std::mem::size_of::<common::Message> as i32)),
         },
     };
     imports.register("math", math_instance.exports);
 
     let player_movement_mod = Module::from_file(&store, "mods/player_movement/build/optimized.wasm").expect("Could not create math module");
-    let player_move_instance = Instance::new(&player_movement_mod, &imports).expect("Could not instantiate player_movement module");
+    let player_move_instance = Instance::new(&player_movement_mod, &imports).expect("Could not instantiate player_movement module");*/
+    let mut config = Config::new();
+    config.wasm_module_linking(true)
+          .wasm_multi_memory(true);
+    let engine = Engine::new(&config).expect("Failed to initialize engine");
+    let mut store = Store::new(&engine, Env::new());
 
-    //let mut player_position = common::PlayerPosition::new();
+    let mut linker: Linker<Env> = Linker::new(&engine);
+    event::event::add_to_linker(&mut linker, |ctx| -> &mut event::Event {
+        &mut ctx.event
+    }).expect("Failed to add event to linker");
+
+    let math_mod = Module::from_file(&engine, "./mods/math/target/wasm32-unknown-unknown/release/math.wasm")
+        .expect("Failed to create math module");
+
+    linker.module(&mut store, "math", &math_mod).expect("Failed to link module");
+
+    let player_movement_mod = Module::from_file(&engine, "./mods/player_movement/target/wasm32-unknown-unknown/release/player_movement.wasm")
+        .expect("Failed to create player_movement module");
+    
+    let pm_mod = linker.instantiate(&mut store, &player_movement_mod).expect("Failed to pre-initialize player_movement mod");
+    let init_fn = pm_mod.get_func(&mut store, "init").expect("Modules must export an init method");
+    init_fn.call(&mut store, &[], &mut []).expect("Failed to init() module");
+
+    let binary_blob = store.data().event.serialize_symbols().expect("Failed to serialize interner");
+
+    let server_handle = server(binary_blob, outgoing_receiver, incoming_sender);
+
     let game_loop = tokio::spawn(async move {
         log::info!("Started game loop...");
         let mut outgoing_message: Vec<common::Message> = Vec::with_capacity(9);
@@ -213,10 +142,14 @@ async fn main() {
             // Clear out any lingering messages from last loop
             outgoing_message.clear();
             
-            let mem = player_move_instance.exports.get_memory("memory").expect("player_movement mod didn't export memory");
-            
-            
-            //handle_msg(msg, &mut player_position, &mut outgoing_message);
+            let run_func = pm_mod.get_func(&mut store, "run").expect("Module must export a `run` method");
+            let mem = pm_mod.get_memory(&mut store, "memory").expect("Module must export `memory`");
+            let heap_base: u32 = pm_mod.get_global(&mut store, "__heap_base")
+                .and_then(|g| g.get(&mut store).i32())
+                .map(|i| i as u32)
+                .expect("Module must export an i32 valued global `__heap_base`");
+
+            mem.write(&mut store, 0, &[]);
 
             for msg in outgoing_message.drain(..) {
                 if let Err(e) = outgoing_sender.send(msg).await {
@@ -231,57 +164,6 @@ async fn main() {
     game_loop.await.unwrap();
     log::info!("Gmae loop stopped");
 }
-
-/*async fn initialize_wasm() -> anyhow::Result<()> {
-    use tokio::fs::read;
- 
-    let engine = Engine::new(
-        Config::new()
-            .wasm_module_linking(true)
-            .wasm_multi_memory(true)).expect("Failed to initialize wasm");
-
-    let wasm = read("mods/player_movement/build/optimized.wasm").await?;
-    let module = Module::new(&engine, wasm).unwrap();
-
-    let mut store = Store::new(&engine, ());
-    fn get_string_impl(bytes: &[u8], ptr: usize) -> String {
-        let mut len = [0u8; 4];
-        len.copy_from_slice(&bytes[(ptr - 4)..ptr]);
-        let len: u32 = unsafe { std::mem::transmute(len) };
-        let str: Vec<u16> = (&bytes[ptr..(ptr + (len as usize))]).chunks(2)
-            .map(|s| unsafe { std::mem::transmute([s[0], s[1]]) })
-            .collect::<Vec<_>>();
-        String::from_utf16_lossy(&str)
-    }
-
-    let mut linker: Linker<()> = Linker::new(&engine);
-    linker.func_wrap("env", "abort", |mut caller: Caller<'_, ()>, msg: i32, _: i32, line: i32, col: i32| -> () {
-        let mem = caller.get_export("memory")
-            .and_then(|m| m.into_memory())
-            .unwrap();
-        let data = mem.data(&caller);
-        let msg = get_string_impl(data, msg as usize);
-
-        println!("Abort: {:?} ({}, {})", msg, line, col);
-    })?;
-
-    let instance = linker.instantiate(&mut store, &module)?;
-    let run = instance.get_typed_func::<(i32,), i32, _>(&mut store, "run")?;
-    
-    let output = run.call(&mut store, (0,))? as usize;
-    let mod_mem = instance.get_memory(&mut store, "memory").expect("Expected module to export memory");
-
-    let pos = &mod_mem.data(&store)[output..(output+12)];
-    let (x, y, z):(u32, u32, u32) = (read_u32(&pos[0..4]), read_u32(&pos[4..8]), read_u32(&pos[8..12]));
-    println!("({}, {}, {})", x, y, z);
-    Ok(())
-}
-
-fn read_u32(bytes: &[u8]) -> u32 {
-    let mut dst = [0u8; 4];
-    dst.copy_from_slice(bytes);
-    unsafe { std::mem::transmute(dst) }
-}*/
 
 async fn ws_chunk(ws: WebSocketUpgrade, outgoing_receiver: Arc<Mutex<mpsc::Receiver<common::Message>>>, incoming_sender: mpsc::Sender<common::Message>) -> impl IntoResponse {
     async fn handle_socket(mut socket: WebSocket, outgoing_receiver: Arc<Mutex<mpsc::Receiver<common::Message>>>, incoming_sender: mpsc::Sender<common::Message>) {
@@ -317,5 +199,5 @@ async fn ws_chunk(ws: WebSocketUpgrade, outgoing_receiver: Arc<Mutex<mpsc::Recei
 }
 
 async fn err_handle(_err: std::io::Error) -> impl IntoResponse {
-    "I don't know what do"
+    "I don't know what to do"
 }

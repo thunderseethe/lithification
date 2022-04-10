@@ -1,0 +1,61 @@
+
+
+record vec2 {
+  x: f32,
+  y: f32,
+}
+
+record mat2 {
+  x-axis: vec2,
+  y-axis: vec2,
+}
+
+record vec3 {
+  x: f32,
+  y: f32,
+  z: f32,
+}
+
+new-vec3: function(x:f32, y:f32, z: f32) -> vec3
+x-axis-vec3: function() -> vec3
+y-axis-vec3: function() -> vec3
+z-axis-vec3: function() -> vec3
+
+record mat3 {
+  x-axis: vec3,
+  y-axis: vec3,
+  z-axis: vec3,
+}
+
+record affine3 {
+  matrix3: mat3,
+  translation: vec3,
+}
+
+record vec4 {
+  x: f32,
+  y: f32,
+  z: f32,
+  w: f32,
+}
+
+record quat {
+  data: vec4,
+}
+record mat4 {
+  x-axis: vec4,
+  y-axis: vec4,
+  z-axis: vec4,
+  w-axis: vec4,
+}
+
+record global-transform {
+  affine: affine3,
+}
+
+new-global-transform: function(position: vec3, rotation: quat, scale: vec3) -> global-transform
+identity-global-transform: function() -> global-transform
+
+matrix: function(this: global-transform) -> mat4
+prepend-translation: function(this: global-transform, translation: vec3) -> global-transform
+append-translation: function(this: global-transform, translation: vec3) -> global-transform
